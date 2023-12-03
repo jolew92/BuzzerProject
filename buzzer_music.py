@@ -215,59 +215,54 @@ class music:
             self.pwms.append(PWM(pin))
         self.stopped = False
         self.flag = 1
+        
+    def clearLights(self):
+        self.ledRed.off()
+        self.ledGreen.off()
+        self.ledYellow.off()
 
     def tick(self):
-        if (not self.stopped):
+        if not self.stopped:
             self.timer = self.timer + 1
-            
-            #Loop
-            if (self.timer % (self.tempo * self.end) == 0 and (not (self.timer == 0))):
-                if (not self.looping):
+
+            # Loop
+            if self.timer % (self.tempo * self.end) == 0 and not (self.timer == 0):
+                if not self.looping:
                     self.stop()
                     return False
                 self.beat = -1
                 self.timer = 0
-            
-            #On Beat
-            if (self.timer % self.tempo == 0):
+
+            # On Beat
+            if self.timer % self.tempo == 0:
                 self.beat = self.beat + 1
 
-                #Remove expired notes from playing list
+                # Remove expired notes from playing list
                 i = 0
-                while (i < len(self.playingDurations)):
+                while i < len(self.playingDurations):
                     self.playingDurations[i] = self.playingDurations[i] - 1
-                    if (self.playingDurations[i] <= 0):
+                    if self.playingDurations[i] <= 0:
                         self.playingNotes.pop(i)
                         self.playingDurations.pop(i)
                     else:
                         i = i + 1
-                        
-                #Add new notes and their durations to the playing list
-                
-                """
-                #Old method runs for every note, slow to process on every beat and causes noticeable delay
-                ssong = song.split(";")
-                for note in ssong:
-                    snote = note.split(" ")
-                    if int(snote[0]) == beat:
-                        playingNotes.append(snote[1])
-                        playingDurations.append(int(snote[2]))
-                """
-                
-                if (self.beat < len(self.notes)):
-                    if (self.notes[self.beat] != None):
+
+                # Add new notes and their durations to the playing list
+                if self.beat < len(self.notes):
+                    if self.notes[self.beat] is not None:
                         for note in self.notes[self.beat]:
                             self.playingNotes.append(note[0])
                             self.playingDurations.append(note[1])
-                
-                #Only need to run these checks on beats
+
+                # Only need to run these checks on beats
                 i = 0
-                for pwm in zip(self.pwms):
+                for pwm, led in zip(self.pwms, [self.ledRed, self.ledYellow, self.ledGreen]):
                     if i >= len(self.playingNotes):
                         if hasattr(pwm, 'duty_u16'):
                             pwm.duty_u16(0)
                         else:
                             pwm.duty(0)
+                        led.off()  # Turn off LEDs when no notes are playing
                     else:
                         # Play note
                         if hasattr(pwm, 'duty_u16'):
@@ -275,21 +270,36 @@ class music:
                         else:
                             pwm.duty(self.duty)
                         pwm.freq(tones[self.playingNotes[i]])
+
+                        # Alternate LEDs every beat
+                        if self.beat % 3 == 0:
+                            self.ledGreen.on()
+                            self.ledRed.off()
+                            self.ledYellow.off()
+                        elif self.beat % 3 == 1:
+                            self.ledGreen.off()
+                            self.ledRed.on()
+                            self.ledYellow.off()
+                        else:
+                            self.ledGreen.off()
+                            self.ledRed.off()
+                            self.ledYellow.on() 
+
                     i += 1
-            
-            #Play arp of all playing notes
-            if (len(self.playingNotes) > len(self.pwms)):
-                p = self.pwms[len(self.pwms)-1];
-                if hasattr(p, 'duty_u16'):
-                    p.duty_u16(self.duty)
-                else:
-                    p.duty(self.duty)
-                
-                if (self.arpnote > len(self.playingNotes)-len(self.pwms)):
-                    self.arpnote = 0
-                self.pwms[len(self.pwms)-1].freq(tones[self.playingNotes[self.arpnote+(len(self.pwms)-1)]])
-                self.arpnote = self.arpnote + 1
-                
+
+                # Play arp of all playing notes
+                if len(self.playingNotes) > len(self.pwms):
+                    p = self.pwms[len(self.pwms) - 1]
+                    if hasattr(p, 'duty_u16'):
+                        p.duty_u16(self.duty)
+                    else:
+                        p.duty(self.duty)
+
+                    if self.arpnote > len(self.playingNotes) - len(self.pwms):
+                        self.arpnote = 0
+                    self.pwms[len(self.pwms) - 1].freq(tones[self.playingNotes[self.arpnote + (len(self.pwms) - 1)]])
+                    self.arpnote = self.arpnote + 1
+
             return True
         else:
             return False
